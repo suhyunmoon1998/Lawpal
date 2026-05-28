@@ -5,3 +5,5 @@ coverage
 dist
 prisma/dev.db
 uploads
+.runtime-logs/*.log
+*.tsbuildinfo
