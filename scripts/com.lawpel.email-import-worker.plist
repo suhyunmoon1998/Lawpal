@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>Label</key>
+    <string>com.lawpel.email-import-worker</string>
+    <key>ProgramArguments</key>
+    <array>
+      <string>/bin/zsh</string>
+      <string>-lc</string>
+      <string>cd '/Users/soohyunmun/lawpel-app' &amp;&amp; /opt/homebrew/bin/npm run worker:email-import</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/soohyunmun/lawpel-app</string>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/Users/soohyunmun/lawpel-app/.runtime-logs/email-import-worker.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/soohyunmun/lawpel-app/.runtime-logs/email-import-worker.error.log</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+      <key>PATH</key>
+      <string>/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+  </dict>
+</plist>

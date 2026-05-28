@@ -1,0 +1,493 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  FIRM_ADMIN
+  ATTORNEY
+  PARALEGAL
+  STAFF
+  READ_ONLY
+}
+
+enum MatterStatus {
+  ACTIVE
+  PENDING
+  ARCHIVED
+  CLOSED
+}
+
+enum IntegrationProvider {
+  GMAIL
+  GOOGLE_CALENDAR
+  OUTLOOK
+}
+
+enum OAuthStatus {
+  CONNECTED
+  REQUIRES_REAUTH
+  DISCONNECTED
+  ERROR
+}
+
+enum EmailDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum EmailReviewStatus {
+  UNASSIGNED
+  ASSIGNED
+  REVIEW_REQUIRED
+  PROCESSED
+}
+
+enum DocumentStatus {
+  AI_DRAFT
+  ATTORNEY_REVIEW_REQUIRED
+  ATTORNEY_APPROVED
+  LOCKED_FOR_COURT_USE
+  REJECTED
+}
+
+enum DeadlineStatus {
+  AUTO_DETECTED
+  ATTORNEY_REVIEW_REQUIRED
+  APPROVED
+  REJECTED
+  SUPERSEDED
+}
+
+enum ApprovalStatus {
+  AUTO_DETECTED
+  AI_DRAFT
+  ATTORNEY_REVIEW_REQUIRED
+  ATTORNEY_APPROVED
+  LOCKED_FOR_COURT_USE
+  REJECTED
+  NEEDS_CORRECTION
+}
+
+enum ApprovalTargetType {
+  DRAFT_DEADLINE
+  CASE_DOCUMENT_VERSION
+  CALENDAR_EVENT
+}
+
+enum CalendarEventStatus {
+  DRAFT
+  ATTORNEY_REVIEW_REQUIRED
+  APPROVED_INTERNAL
+  SYNCED_TO_GOOGLE
+  REJECTED
+}
+
+enum CalculationType {
+  CALENDAR_DAYS
+  COURT_DAYS
+  BUSINESS_DAYS
+}
+
+enum TaskStatus {
+  OPEN
+  IN_PROGRESS
+  BLOCKED
+  DONE
+}
+
+enum ContactType {
+  CLIENT
+  OPPOSING_COUNSEL
+  COURT
+  EXPERT
+  VENDOR
+  OTHER
+}
+
+model LawFirm {
+  id                       String                  @id @default(cuid())
+  name                     String
+  slug                     String                  @unique
+  timezone                 String                  @default("America/Los_Angeles")
+  createdAt                DateTime                @default(now())
+  updatedAt                DateTime                @updatedAt
+  users                    User[]
+  connectedAccounts        ConnectedEmailAccount[]
+  matters                  CaseMatter[]
+  emailMessages            EmailMessage[]
+  legalRuleSources         LegalRuleSource[]
+  deadlineRules            DeadlineRule[]
+  auditLogs                AuditLog[]
+  calendarEvents           CalendarEvent[]
+  tasks                    Task[]
+}
+
+model User {
+  id                       String                  @id @default(cuid())
+  lawFirmId                String
+  email                    String                  @unique
+  name                     String
+  hashedPassword           String
+  role                     UserRole
+  isActive                 Boolean                 @default(true)
+  createdAt                DateTime                @default(now())
+  updatedAt                DateTime                @updatedAt
+  lawFirm                  LawFirm                 @relation(fields: [lawFirmId], references: [id], onDelete: Cascade)
+  approvals                AttorneyApproval[]      @relation("ApprovalActor")
+  approvedDeadlines        DraftDeadline[]         @relation("DeadlineApprover")
+  approvedDocumentVersions CaseDocumentVersion[]   @relation("DocumentVersionApprover")
+  auditLogs                AuditLog[]
+  tasks                    Task[]                  @relation("TaskOwner")
+}
+
+model ConnectedEmailAccount {
+  id                       String               @id @default(cuid())
+  lawFirmId                String
+  provider                 IntegrationProvider
+  emailAddress             String
+  displayName              String?
+  encryptedAccessToken     String
+  encryptedRefreshToken    String?
+  tokenExpiresAt           DateTime?
+  scopes                   String[]
+  oauthStatus              OAuthStatus          @default(CONNECTED)
+  syncCursor               String?
+  lastSyncError            String?
+  lastSyncedAt             DateTime?
+  dailySyncEnabled         Boolean              @default(false)
+  dailySyncHour            Int                  @default(6)
+  dailySyncMinute          Int                  @default(0)
+  createdAt                DateTime             @default(now())
+  updatedAt                DateTime             @updatedAt
+  lawFirm                  LawFirm              @relation(fields: [lawFirmId], references: [id], onDelete: Cascade)
+  emailMessages            EmailMessage[]
+  calendarEvents           CalendarEvent[]
+
+  @@unique([provider, emailAddress])
+  @@index([lawFirmId, provider, createdAt])
+}
+
+model CaseMatter {
+  id                       String                 @id @default(cuid())
+  lawFirmId                String
+  name                     String
+  caseNumber               String?
+  courtName                String?
+  judgeName                String?
+  department               String?
+  partiesJson              Json?
+  aliases                  String[]
+  status                   MatterStatus           @default(ACTIVE)
+  workspaceKey             String                 @unique
+  createdAt                DateTime               @default(now())
+  updatedAt                DateTime               @updatedAt
+  lawFirm                  LawFirm                @relation(fields: [lawFirmId], references: [id], onDelete: Cascade)
+  emailMessages            EmailMessage[]
+  deadlineTriggers         DeadlineTrigger[]
+  draftDeadlines           DraftDeadline[]
+  documents                CaseDocument[]
+  calendarEvents           CalendarEvent[]
+  tasks                    Task[]
+  contacts                 Contact[]
+
+  @@index([lawFirmId, updatedAt])
+}
+
+model EmailMessage {
+  id                       String              @id @default(cuid())
+  lawFirmId                String
+  connectedEmailAccountId  String
+  caseMatterId             String?
+  providerMessageId        String              @unique
+  providerThreadId         String?
+  subject                  String
+  fromAddress              String
+  toAddresses              String[]
+  ccAddresses              String[]
+  bccAddresses             String[]
+  sentAt                   DateTime
+  receivedAt               DateTime
+  direction                EmailDirection      @default(INBOUND)
+  bodyText                 String?
+  bodyHtml                 String?
+  immutableRawRef          String?
+  extractionJson           Json?
+  classificationScore      Float?
+  reviewStatus             EmailReviewStatus   @default(UNASSIGNED)
+  hasAttachments           Boolean             @default(false)
+  createdAt                DateTime            @default(now())
+  updatedAt                DateTime            @updatedAt
+  lawFirm                  LawFirm             @relation(fields: [lawFirmId], references: [id], onDelete: Cascade)
+  connectedEmailAccount    ConnectedEmailAccount @relation(fields: [connectedEmailAccountId], references: [id], onDelete: Cascade)
+  caseMatter               CaseMatter?         @relation(fields: [caseMatterId], references: [id], onDelete: SetNull)
+  attachments              EmailAttachment[]
+  deadlineTriggers         DeadlineTrigger[]
+  draftDeadlines           DraftDeadline[]
+  auditLogs                AuditLog[]
+
+  @@index([lawFirmId, receivedAt])
+  @@index([lawFirmId, reviewStatus])
+  @@index([caseMatterId, receivedAt])
+  @@index([connectedEmailAccountId, receivedAt])
+}
+
+model EmailAttachment {
+  id                       String           @id @default(cuid())
+  emailMessageId           String
+  providerAttachmentId     String?
+  fileName                 String
+  mimeType                 String
+  storageKey               String
+  sha256                   String?
+  extractedText            String?
+  extractionJson           Json?
+  immutableOriginalRef     String?
+  createdAt                DateTime         @default(now())
+  updatedAt                DateTime         @updatedAt
+  emailMessage             EmailMessage     @relation(fields: [emailMessageId], references: [id], onDelete: Cascade)
+  deadlineTriggers         DeadlineTrigger[]
+  draftDeadlines           DraftDeadline[]
+
+  @@unique([emailMessageId, providerAttachmentId])
+}
+
+model LegalRuleSource {
+  id                       String           @id @default(cuid())
+  lawFirmId                String?
+  jurisdiction             String
+  sourceName               String
+  ruleSection              String
+  exactText                String
+  verifiedExcerpt          String?
+  sourceUrl                String?
+  uploadedSourceReference  String?
+  effectiveDate            DateTime?
+  lastVerifiedDate         DateTime
+  calculationType          CalculationType
+  serviceExtensionLogic    String?
+  holidayAdjustmentLogic   String?
+  confidenceLevel          Float
+  attorneyVerified         Boolean          @default(false)
+  createdAt                DateTime         @default(now())
+  updatedAt                DateTime         @updatedAt
+  lawFirm                  LawFirm?         @relation(fields: [lawFirmId], references: [id], onDelete: SetNull)
+  deadlineRules            DeadlineRule[]
+  draftDeadlines           DraftDeadline[]
+  documentVersions         CaseDocumentVersion[] @relation("DocumentVersionRuleSources")
+  auditLogs                AuditLog[]
+}
+
+model DeadlineRule {
+  id                       String           @id @default(cuid())
+  lawFirmId                String?
+  legalRuleSourceId        String
+  name                     String
+  triggerType              String
+  responseDays             Int?
+  serviceExtensionDays     Int?
+  appliesWhenJson          Json?
+  createdAt                DateTime         @default(now())
+  updatedAt                DateTime         @updatedAt
+  lawFirm                  LawFirm?         @relation(fields: [lawFirmId], references: [id], onDelete: SetNull)
+  legalRuleSource          LegalRuleSource  @relation(fields: [legalRuleSourceId], references: [id], onDelete: Cascade)
+  deadlineTriggers         DeadlineTrigger[]
+}
+
+model DeadlineTrigger {
+  id                       String           @id @default(cuid())
+  caseMatterId             String
+  sourceEmailId            String?
+  sourceAttachmentId       String?
+  deadlineRuleId           String?
+  triggerType              String
+  triggerDate              DateTime
+  serviceDate              DateTime?
+  serviceMethod            String?
+  extractedFactsJson       Json?
+  confidenceScore          Float
+  createdAt                DateTime         @default(now())
+  updatedAt                DateTime         @updatedAt
+  caseMatter               CaseMatter       @relation(fields: [caseMatterId], references: [id], onDelete: Cascade)
+  sourceEmail              EmailMessage?    @relation(fields: [sourceEmailId], references: [id], onDelete: SetNull)
+  sourceAttachment         EmailAttachment? @relation(fields: [sourceAttachmentId], references: [id], onDelete: SetNull)
+  deadlineRule             DeadlineRule?    @relation(fields: [deadlineRuleId], references: [id], onDelete: SetNull)
+
+  @@index([caseMatterId, createdAt])
+}
+
+model DraftDeadline {
+  id                       String           @id @default(cuid())
+  caseMatterId             String
+  sourceEmailId            String?
+  sourceAttachmentId       String?
+  triggerType              String
+  triggerDate              DateTime
+  serviceDate              DateTime?
+  serviceMethod            String?
+  legalRuleSourceId        String?
+  ruleSection              String?
+  calculatedDeadlineDate   DateTime
+  calculationExplanation   String
+  confidenceScore          Float
+  status                   DeadlineStatus   @default(AUTO_DETECTED)
+  approvedById             String?
+  approvedAt               DateTime?
+  createdAt                DateTime         @default(now())
+  updatedAt                DateTime         @updatedAt
+  caseMatter               CaseMatter       @relation(fields: [caseMatterId], references: [id], onDelete: Cascade)
+  sourceEmail              EmailMessage?    @relation(fields: [sourceEmailId], references: [id], onDelete: SetNull)
+  sourceAttachment         EmailAttachment? @relation(fields: [sourceAttachmentId], references: [id], onDelete: SetNull)
+  legalRuleSource          LegalRuleSource? @relation(fields: [legalRuleSourceId], references: [id], onDelete: SetNull)
+  approvedBy               User?            @relation("DeadlineApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+  calendarEvents           CalendarEvent[]
+
+  @@index([caseMatterId, status, updatedAt])
+}
+
+model CalendarEvent {
+  id                       String              @id @default(cuid())
+  lawFirmId                String
+  caseMatterId             String?
+  connectedEmailAccountId  String?
+  draftDeadlineId          String?
+  title                    String
+  description              String
+  startsAt                 DateTime
+  endsAt                   DateTime
+  googleEventId            String?
+  internalOnly             Boolean             @default(true)
+  status                   CalendarEventStatus @default(DRAFT)
+  warningLabel             String?
+  approvalStatus           ApprovalStatus      @default(ATTORNEY_REVIEW_REQUIRED)
+  sourceEmailId            String?
+  sourceAttachmentId       String?
+  legalRuleSourceId        String?
+  createdAt                DateTime            @default(now())
+  updatedAt                DateTime            @updatedAt
+  lawFirm                  LawFirm             @relation(fields: [lawFirmId], references: [id], onDelete: Cascade)
+  caseMatter               CaseMatter?         @relation(fields: [caseMatterId], references: [id], onDelete: SetNull)
+  connectedEmailAccount    ConnectedEmailAccount? @relation(fields: [connectedEmailAccountId], references: [id], onDelete: SetNull)
+  draftDeadline            DraftDeadline?      @relation(fields: [draftDeadlineId], references: [id], onDelete: SetNull)
+
+  @@index([lawFirmId, startsAt])
+  @@index([lawFirmId, approvalStatus, updatedAt])
+}
+
+model CaseDocument {
+  id                       String               @id @default(cuid())
+  caseMatterId             String
+  name                     String
+  documentType             String
+  latestVersionId          String?              @unique
+  createdAt                DateTime             @default(now())
+  updatedAt                DateTime             @updatedAt
+  caseMatter               CaseMatter           @relation(fields: [caseMatterId], references: [id], onDelete: Cascade)
+  versions                 CaseDocumentVersion[]
+
+  @@index([caseMatterId, updatedAt])
+}
+
+model CaseDocumentVersion {
+  id                       String               @id @default(cuid())
+  documentId               String
+  versionNumber            Int
+  content                  String
+  generatedFromEmailIds    String[]
+  generatedFromAttachmentIds String[]
+  changeSummary            String
+  status                   DocumentStatus       @default(ATTORNEY_REVIEW_REQUIRED)
+  approvedById             String?
+  approvedAt               DateTime?
+  createdAt                DateTime             @default(now())
+  document                 CaseDocument         @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  legalRuleSources         LegalRuleSource[]    @relation("DocumentVersionRuleSources")
+  changeLogs               DocumentChangeLog[]
+  approvedBy               User?                @relation("DocumentVersionApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+
+  @@unique([documentId, versionNumber])
+  @@index([status, createdAt])
+  @@index([status, approvedAt])
+}
+
+model DocumentChangeLog {
+  id                       String               @id @default(cuid())
+  documentVersionId        String
+  summary                  String
+  beforeContent            String?
+  afterContent             String
+  generatedAt              DateTime             @default(now())
+  status                   ApprovalStatus       @default(ATTORNEY_REVIEW_REQUIRED)
+  documentVersion          CaseDocumentVersion  @relation(fields: [documentVersionId], references: [id], onDelete: Cascade)
+}
+
+model AttorneyApproval {
+  id                       String               @id @default(cuid())
+  actorUserId              String
+  targetType               ApprovalTargetType
+  targetId                 String
+  status                   ApprovalStatus
+  comment                  String?
+  beforeValue              Json?
+  afterValue               Json?
+  createdAt                DateTime             @default(now())
+  actor                    User                 @relation("ApprovalActor", fields: [actorUserId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id                       String           @id @default(cuid())
+  lawFirmId                String
+  actorUserId              String?
+  actionType               String
+  sourceEntityType         String
+  sourceEntityId           String
+  sourceEmailId            String?
+  sourceDocumentId         String?
+  legalRuleSourceId        String?
+  approvalStatus           ApprovalStatus?
+  beforeValue              Json?
+  afterValue               Json?
+  createdAt                DateTime         @default(now())
+  lawFirm                  LawFirm          @relation(fields: [lawFirmId], references: [id], onDelete: Cascade)
+  actor                    User?            @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+  sourceEmail              EmailMessage?    @relation(fields: [sourceEmailId], references: [id], onDelete: SetNull)
+  legalRuleSource          LegalRuleSource? @relation(fields: [legalRuleSourceId], references: [id], onDelete: SetNull)
+
+  @@index([lawFirmId, createdAt])
+}
+
+model Task {
+  id                       String           @id @default(cuid())
+  lawFirmId                String
+  caseMatterId             String?
+  ownerUserId              String?
+  title                    String
+  description              String?
+  status                   TaskStatus       @default(OPEN)
+  dueAt                    DateTime?
+  createdAt                DateTime         @default(now())
+  updatedAt                DateTime         @updatedAt
+  lawFirm                  LawFirm          @relation(fields: [lawFirmId], references: [id], onDelete: Cascade)
+  caseMatter               CaseMatter?      @relation(fields: [caseMatterId], references: [id], onDelete: SetNull)
+  owner                    User?            @relation("TaskOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+
+  @@index([lawFirmId, status])
+}
+
+model Contact {
+  id                       String           @id @default(cuid())
+  caseMatterId             String
+  type                     ContactType
+  name                     String
+  email                    String?
+  phone                    String?
+  organization             String?
+  notes                    String?
+  createdAt                DateTime         @default(now())
+  updatedAt                DateTime         @updatedAt
+  caseMatter               CaseMatter       @relation(fields: [caseMatterId], references: [id], onDelete: Cascade)
+}

@@ -1,0 +1,16 @@
+/bin/zsh: can't open input file: /Users/soohyunmun/Desktop/lawpel /scripts/start-email-import-worker.sh
+/bin/zsh: can't open input file: /Users/soohyunmun/Desktop/lawpel /scripts/start-email-import-worker.sh
+/bin/zsh: can't open input file: /Users/soohyunmun/Desktop/lawpel /scripts/start-email-import-worker.sh
+/bin/zsh: can't open input file: /Users/soohyunmun/Desktop/lawpel /scripts/start-email-import-worker.sh
+shell-init: error retrieving current directory: getcwd: cannot access parent directories: Operation not permitted
+job-working-directory: error retrieving current directory: getcwd: cannot access parent directories: Operation not permitted
+shell-init: error retrieving current directory: getcwd: cannot access parent directories: Operation not permitted
+shell-init: error retrieving current directory: getcwd: cannot access parent directories: Operation not permitted
+shell-init: error retrieving current directory: getcwd: cannot access parent directories: Operation not permitted
+job-working-directory: error retrieving current directory: getcwd: cannot access parent directories: Operation not permitted
+shell-init: error retrieving current directory: getcwd: cannot access parent directories: Operation not permitted
+shell-init: error retrieving current directory: getcwd: cannot access parent directories: Operation not permitted
+shell-init: error retrieving current directory: getcwd: cannot access parent directories: Operation not permitted
+job-working-directory: error retrieving current directory: getcwd: cannot access parent directories: Operation not permitted
+shell-init: error retrieving current directory: getcwd: cannot access parent directories: Operation not permitted
+shell-init: error retrieving current directory: getcwd: cannot access parent directories: Operation not permitted
